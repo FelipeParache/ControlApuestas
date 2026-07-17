@@ -1,0 +1,451 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Control de Apuestas</title>
+<script src="https://cdn.jsdelivr.net/npm/chart.js@4.5.0/dist/chart.umd.js" integrity="sha384-iU8HYtnGQ8Cy4zl7gbNMOhsDTTKX02BTXptVP/vqAWIaTfM7isw76iyZCsjL2eVi" crossorigin="anonymous"></script>
+<style>
+:root{
+  color-scheme: light;
+  --bg:#f6f7f9; --card:#ffffff; --ink:#1a1d24; --muted:#6b7280;
+  --line:#e5e7eb; --brand:#2563eb; --brand-dark:#1d4ed8;
+  --green:#16a34a; --green-bg:#dcfce7; --red:#dc2626; --red-bg:#fee2e2;
+  --amber:#d97706; --amber-bg:#fef3c7; --slate:#64748b; --slate-bg:#f1f5f9;
+  --radius:12px; --shadow:0 1px 3px rgba(0,0,0,.06),0 1px 2px rgba(0,0,0,.04);
+}
+*{box-sizing:border-box}
+body{margin:0;background:var(--bg);color:var(--ink);
+  font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,Helvetica,Arial,sans-serif;
+  font-size:14px;line-height:1.45;padding:16px;}
+.wrap{max-width:1120px;margin:0 auto;}
+h1{font-size:20px;margin:0 0 2px;}
+.sub{color:var(--muted);font-size:13px;margin:0 0 16px;}
+.card{background:var(--card);border:1px solid var(--line);border-radius:var(--radius);
+  box-shadow:var(--shadow);padding:16px;margin-bottom:16px;}
+.card h2{font-size:14px;text-transform:uppercase;letter-spacing:.04em;color:var(--muted);
+  margin:0 0 12px;font-weight:700;}
+.row{display:flex;flex-wrap:wrap;gap:12px;align-items:flex-end;}
+.field{display:flex;flex-direction:column;gap:4px;}
+.field label{font-size:12px;color:var(--muted);font-weight:600;}
+input,select{font:inherit;padding:8px 10px;border:1px solid var(--line);border-radius:8px;
+  background:#fff;color:var(--ink);min-width:0;}
+input:focus,select:focus{outline:2px solid var(--brand);outline-offset:-1px;border-color:var(--brand);}
+button{font:inherit;font-weight:600;border:none;border-radius:8px;padding:9px 14px;cursor:pointer;}
+.btn{background:var(--brand);color:#fff;}
+.btn:hover{background:var(--brand-dark);}
+.btn-sm{padding:5px 9px;font-size:12px;}
+.btn-ghost{background:var(--slate-bg);color:var(--ink);}
+.btn-ghost:hover{background:#e2e8f0;}
+.btn-danger{background:var(--red-bg);color:var(--red);}
+.btn-danger:hover{background:#fecaca;}
+.topbar{display:flex;flex-wrap:wrap;gap:10px;align-items:flex-end;justify-content:space-between;}
+.kpis{display:grid;grid-template-columns:repeat(auto-fit,minmax(150px,1fr));gap:12px;}
+.kpi{background:var(--card);border:1px solid var(--line);border-radius:var(--radius);
+  padding:12px 14px;box-shadow:var(--shadow);}
+.kpi .k-label{font-size:11px;text-transform:uppercase;letter-spacing:.03em;color:var(--muted);font-weight:600;}
+.kpi .k-val{font-size:20px;font-weight:800;margin-top:3px;}
+.kpi .k-sub{font-size:11px;color:var(--muted);margin-top:2px;}
+.pos{color:var(--green)} .neg{color:var(--red)} .neu{color:var(--slate)}
+.counts{display:flex;flex-wrap:wrap;gap:8px;margin-top:4px;}
+.pill{padding:3px 9px;border-radius:999px;font-size:12px;font-weight:700;}
+.pill.g{background:var(--green-bg);color:var(--green);}
+.pill.p{background:var(--red-bg);color:var(--red);}
+.pill.n{background:var(--slate-bg);color:var(--slate);}
+.pill.pend{background:var(--amber-bg);color:var(--amber);}
+table{width:100%;border-collapse:collapse;font-size:13px;}
+th,td{padding:8px 9px;text-align:right;border-bottom:1px solid var(--line);white-space:nowrap;}
+th{font-size:11px;text-transform:uppercase;letter-spacing:.03em;color:var(--muted);text-align:right;}
+th.l,td.l{text-align:left;}
+tbody tr:hover{background:#fafbfc;}
+.tag{padding:2px 8px;border-radius:6px;font-size:12px;font-weight:700;}
+.tag.g{background:var(--green-bg);color:var(--green);}
+.tag.p{background:var(--red-bg);color:var(--red);}
+.tag.n{background:var(--slate-bg);color:var(--slate);}
+.tag.pend{background:var(--amber-bg);color:var(--amber);}
+.warn{background:var(--amber-bg);color:#92400e;border:1px solid #fcd34d;border-radius:8px;
+  padding:8px 12px;font-size:13px;margin-bottom:12px;}
+.tblwrap{overflow-x:auto;}
+.muted{color:var(--muted);}
+.chart-box{position:relative;height:260px;}
+.empty{text-align:center;color:var(--muted);padding:24px;font-size:13px;}
+.actions-cell{display:flex;gap:6px;justify-content:flex-end;}
+.foot{color:var(--muted);font-size:12px;text-align:center;margin-top:8px;}
+@media(max-width:560px){ th,td{padding:7px 6px;} h1{font-size:18px;} }
+select.res-inline{padding:4px 6px;font-size:12px;font-weight:700;}
+</style>
+</head>
+<body>
+<div class="wrap">
+  <h1>Control de Apuestas</h1>
+  <p class="sub">Cargá el monto en pesos, la cuota y el resultado. La app calcula el resto sobre tu bank mensual.</p>
+
+  <!-- CONFIG / MES -->
+  <div class="card">
+    <div class="topbar">
+      <div class="row">
+        <div class="field">
+          <label>Mes</label>
+          <select id="monthSel"></select>
+        </div>
+        <div class="field">
+          <label>Bank inicial del mes ($)</label>
+          <input id="bankInput" type="number" step="1000" style="width:150px">
+        </div>
+        <div class="field">
+          <label>Alerta si stake supera (%)</label>
+          <input id="riskInput" type="number" step="0.5" style="width:120px">
+        </div>
+      </div>
+      <div class="row">
+        <button class="btn-ghost" id="btnExportJson">⬇ Respaldo (JSON)</button>
+        <button class="btn-ghost" id="btnImportJson">⬆ Importar</button>
+        <button class="btn-ghost" id="btnExportCsv">⬇ CSV del mes</button>
+        <input id="importFile" type="file" accept="application/json" style="display:none">
+      </div>
+    </div>
+  </div>
+
+  <!-- KPIs -->
+  <div class="kpis" id="kpis"></div>
+
+  <div class="card" style="margin-top:16px">
+    <h2>Resumen de apuestas</h2>
+    <div class="counts" id="counts"></div>
+  </div>
+
+  <!-- GRAFICO -->
+  <div class="card">
+    <h2>Evolución del bank</h2>
+    <div class="chart-box"><canvas id="chart"></canvas></div>
+  </div>
+
+  <!-- FORM NUEVA APUESTA -->
+  <div class="card">
+    <h2>Nueva apuesta</h2>
+    <div id="riskWarn"></div>
+    <div class="row">
+      <div class="field"><label>Fecha</label><input id="fFecha" type="date" style="width:150px"></div>
+      <div class="field" style="flex:1;min-width:200px"><label>Apuesta (ej: River gana)</label><input id="fEvento" type="text" placeholder="Selección / evento" style="width:100%"></div>
+      <div class="field"><label>Cuota</label><input id="fCuota" type="number" step="0.01" placeholder="1.85" style="width:100px"></div>
+      <div class="field"><label>Monto ($)</label><input id="fMonto" type="number" step="500" placeholder="15000" style="width:120px"></div>
+      <div class="field"><label>Resultado</label>
+        <select id="fResultado" style="width:130px">
+          <option value="Pendiente">Pendiente</option>
+          <option value="Ganada">Ganada</option>
+          <option value="Perdida">Perdida</option>
+          <option value="Nula">Nula</option>
+        </select>
+      </div>
+      <div class="field"><label>&nbsp;</label><button class="btn" id="btnAdd">Agregar</button></div>
+    </div>
+    <div class="foot" id="stakeHint"></div>
+  </div>
+
+  <!-- TABLA -->
+  <div class="card">
+    <h2>Registro del mes</h2>
+    <div class="tblwrap">
+      <table id="tbl">
+        <thead>
+          <tr>
+            <th class="l">#</th><th class="l">Fecha</th><th class="l">Apuesta</th>
+            <th>Cuota</th><th>Monto</th><th>% bank</th>
+            <th class="l">Resultado</th><th>Retorno</th><th>Neto</th><th>Bank acum.</th><th></th>
+          </tr>
+        </thead>
+        <tbody id="tbody"></tbody>
+      </table>
+    </div>
+    <div class="empty" id="emptyMsg" style="display:none">Todavía no cargaste apuestas este mes.</div>
+  </div>
+
+  <p class="foot">Los datos se guardan en este dispositivo. Hacé respaldos periódicos con el botón JSON.</p>
+</div>
+
+<script>
+"use strict";
+const KEY = "control_apuestas_v1";
+const DEFAULT_BANK = 500000;
+const DEFAULT_RISK = 5;
+
+const nf = new Intl.NumberFormat("es-AR",{maximumFractionDigits:0});
+const pf = (x)=> (x*100).toFixed(1).replace(".",",")+"%";
+const money = (x)=> "$"+nf.format(Math.round(x));
+const money1 = (x)=> (x<0?"-$":"$")+nf.format(Math.round(Math.abs(x)));
+
+function monthKeyFromDate(d){ return d.slice(0,7); } // YYYY-MM
+function monthLabel(k){
+  const [y,m]=k.split("-");
+  const meses=["ene","feb","mar","abr","may","jun","jul","ago","sep","oct","nov","dic"];
+  return meses[parseInt(m,10)-1]+" "+y;
+}
+
+let state = load();
+let chart = null;
+
+function load(){
+  try{
+    const raw = localStorage.getItem(KEY);
+    if(raw){ const s=JSON.parse(raw); s.banks=s.banks||{}; s.bets=s.bets||[]; s.risk=s.risk??DEFAULT_RISK; return s; }
+  }catch(e){}
+  const today = new Date().toISOString().slice(0,10);
+  return { active: monthKeyFromDate(today), banks:{}, bets:[], risk:DEFAULT_RISK };
+}
+function save(){ localStorage.setItem(KEY, JSON.stringify(state)); }
+
+function bankOf(mk){ return state.banks[mk] ?? DEFAULT_BANK; }
+
+function neto(b){
+  if(b.resultado==="Ganada") return b.monto*(b.cuota-1);
+  if(b.resultado==="Perdida") return -b.monto;
+  return 0; // Nula, Pendiente
+}
+function retorno(b){
+  if(b.resultado==="Ganada") return b.monto*b.cuota;
+  if(b.resultado==="Nula") return b.monto;
+  return 0;
+}
+
+function monthsPresent(){
+  const set = new Set(state.bets.map(b=>monthKeyFromDate(b.fecha)));
+  set.add(state.active);
+  const today = new Date().toISOString().slice(0,10);
+  set.add(monthKeyFromDate(today));
+  return [...set].sort().reverse();
+}
+
+function betsOfActive(){
+  return state.bets
+    .filter(b=>monthKeyFromDate(b.fecha)===state.active)
+    .sort((a,b)=> a.fecha===b.fecha ? a.id-b.id : a.fecha.localeCompare(b.fecha));
+}
+
+// ---------- RENDER ----------
+function render(){
+  renderMonths();
+  const bank = bankOf(state.active);
+  document.getElementById("bankInput").value = bank;
+  document.getElementById("riskInput").value = state.risk;
+
+  const bets = betsOfActive();
+  renderKpis(bets, bank);
+  renderCounts(bets);
+  renderTable(bets, bank);
+  renderChart(bets, bank);
+  renderStakeHint(bank);
+}
+
+function renderMonths(){
+  const sel = document.getElementById("monthSel");
+  const months = monthsPresent();
+  sel.innerHTML = months.map(m=>`<option value="${m}" ${m===state.active?"selected":""}>${monthLabel(m)}</option>`).join("");
+}
+
+function renderKpis(bets, bank){
+  const totalApostado = bets.reduce((s,b)=>s+b.monto,0);
+  const netos = bets.map(neto);
+  const netoTotal = netos.reduce((s,x)=>s+x,0);
+  const ganancias = netos.filter(x=>x>0).reduce((s,x)=>s+x,0);
+  const perdidas = -netos.filter(x=>x<0).reduce((s,x)=>s+x,0);
+  const bankActual = bank + netoTotal;
+  const resueltas = bets.filter(b=>b.resultado==="Ganada"||b.resultado==="Perdida"||b.resultado==="Nula");
+  const apostadoResuelto = resueltas.reduce((s,b)=>s+b.monto,0);
+  const rentBank = bank? netoTotal/bank : 0;
+  const yieldRoi = apostadoResuelto? netoTotal/apostadoResuelto : 0;
+  const g = bets.filter(b=>b.resultado==="Ganada").length;
+  const p = bets.filter(b=>b.resultado==="Perdida").length;
+  const tasa = (g+p)? g/(g+p) : 0;
+
+  const cls = (x)=> x>0?"pos":x<0?"neg":"neu";
+  const kpis = [
+    ["Bank inicial", money(bank), ""],
+    ["Bank actual", money(bankActual), (netoTotal>=0?"▲ ":"▼ ")+money1(netoTotal), cls(netoTotal)],
+    ["Resultado neto", money1(netoTotal), pf(rentBank)+" sobre bank", cls(netoTotal)],
+    ["ROI / Yield", (yieldRoi>=0?"+":"")+pf(yieldRoi), "ganancia por $ apostado", cls(yieldRoi)],
+    ["Total apostado", money(totalApostado), (bank?pf(totalApostado/bank):"")+" del bank"],
+    ["Ganancias", money(ganancias), "", "pos"],
+    ["Pérdidas", money(perdidas), "", perdidas>0?"neg":"neu"],
+    ["Tasa de acierto", pf(tasa), g+"G / "+p+"P"],
+  ];
+  document.getElementById("kpis").innerHTML = kpis.map(k=>`
+    <div class="kpi">
+      <div class="k-label">${k[0]}</div>
+      <div class="k-val ${k[3]||""}">${k[1]}</div>
+      ${k[2]?`<div class="k-sub ${k[3]||""}">${k[2]}</div>`:""}
+    </div>`).join("");
+}
+
+function renderCounts(bets){
+  const c = {Ganada:0,Perdida:0,Nula:0,Pendiente:0};
+  bets.forEach(b=>c[b.resultado]++);
+  document.getElementById("counts").innerHTML = `
+    <span class="pill g">Ganadas: ${c.Ganada}</span>
+    <span class="pill p">Perdidas: ${c.Perdida}</span>
+    <span class="pill n">Nulas: ${c.Nula}</span>
+    <span class="pill pend">Pendientes: ${c.Pendiente}</span>
+    <span class="pill n" style="background:#eef2ff;color:#4338ca">Total: ${bets.length}</span>`;
+}
+
+function renderTable(bets, bank){
+  const tb = document.getElementById("tbody");
+  document.getElementById("emptyMsg").style.display = bets.length? "none":"block";
+  let acum = bank;
+  const tagCls = {Ganada:"g",Perdida:"p",Nula:"n",Pendiente:"pend"};
+  tb.innerHTML = bets.map((b,i)=>{
+    const n = neto(b);
+    acum += n;
+    const pct = bank? b.monto/bank : 0;
+    const over = pct*100 > state.risk;
+    const ncls = n>0?"pos":n<0?"neg":"neu";
+    return `<tr>
+      <td class="l muted">${i+1}</td>
+      <td class="l">${b.fecha.slice(8,10)}/${b.fecha.slice(5,7)}</td>
+      <td class="l">${escapeHtml(b.evento)}</td>
+      <td>${b.cuota.toFixed(2)}</td>
+      <td>${money(b.monto)}</td>
+      <td class="${over?'neg':''}">${pf(pct)}${over?' ⚠':''}</td>
+      <td class="l">
+        <select class="res-inline tag ${tagCls[b.resultado]}" data-id="${b.id}" data-act="res">
+          ${["Pendiente","Ganada","Perdida","Nula"].map(o=>`<option ${o===b.resultado?"selected":""}>${o}</option>`).join("")}
+        </select>
+      </td>
+      <td>${retorno(b)?money(retorno(b)):"—"}</td>
+      <td class="${ncls}">${b.resultado==="Pendiente"?"—":money1(n)}</td>
+      <td>${money(acum)}</td>
+      <td><div class="actions-cell"><button class="btn-danger btn-sm" data-id="${b.id}" data-act="del">✕</button></div></td>
+    </tr>`;
+  }).join("");
+}
+
+function renderChart(bets, bank){
+  const resueltas = bets.filter(b=>b.resultado!=="Pendiente");
+  const labels=["Inicio"]; const data=[bank]; let acum=bank;
+  resueltas.forEach((b,i)=>{ acum+=neto(b); labels.push("#"+(i+1)); data.push(Math.round(acum)); });
+  const ctx = document.getElementById("chart");
+  if(chart) chart.destroy();
+  chart = new Chart(ctx,{
+    type:"line",
+    data:{labels,datasets:[{
+      label:"Bank",data,
+      borderColor:"#2563eb",backgroundColor:"rgba(37,99,235,.08)",
+      fill:true,tension:.25,pointRadius:3,borderWidth:2
+    }]},
+    options:{
+      responsive:true,maintainAspectRatio:false,
+      plugins:{legend:{display:false},tooltip:{callbacks:{label:c=>money(c.parsed.y)}}},
+      scales:{
+        y:{ticks:{callback:v=>"$"+nf.format(v)}},
+        x:{grid:{display:false}}
+      }
+    }
+  });
+}
+
+function renderStakeHint(bank){
+  const lo=Math.round(bank*0.01), hi=Math.round(bank*0.03);
+  document.getElementById("stakeHint").textContent =
+    `Stake recomendado (gestión conservadora, 1–3% del bank): ${money(lo)} a ${money(hi)}.`;
+}
+
+function checkRiskWarn(){
+  const monto = parseFloat(document.getElementById("fMonto").value)||0;
+  const bank = bankOf(state.active);
+  const w = document.getElementById("riskWarn");
+  if(bank && monto/bank*100 > state.risk){
+    w.innerHTML = `<div class="warn">⚠ Esta apuesta es el ${pf(monto/bank)} del bank, supera tu límite del ${state.risk}%. Considerá reducir el monto.</div>`;
+  } else { w.innerHTML=""; }
+}
+
+function escapeHtml(s){return (s||"").replace(/[&<>"']/g,c=>({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#39;"}[c]));}
+
+// ---------- EVENTS ----------
+document.getElementById("monthSel").addEventListener("change",e=>{ state.active=e.target.value; save(); render(); });
+document.getElementById("bankInput").addEventListener("change",e=>{
+  state.banks[state.active] = parseFloat(e.target.value)||DEFAULT_BANK; save(); render();
+});
+document.getElementById("riskInput").addEventListener("change",e=>{
+  state.risk = parseFloat(e.target.value)||DEFAULT_RISK; save(); render();
+});
+document.getElementById("fMonto").addEventListener("input",checkRiskWarn);
+
+document.getElementById("btnAdd").addEventListener("click",()=>{
+  const fecha = document.getElementById("fFecha").value;
+  const evento = document.getElementById("fEvento").value.trim();
+  const cuota = parseFloat(document.getElementById("fCuota").value);
+  const monto = parseFloat(document.getElementById("fMonto").value);
+  const resultado = document.getElementById("fResultado").value;
+  if(!fecha){ alert("Poné una fecha."); return; }
+  if(!evento){ alert("Poné el nombre de la apuesta."); return; }
+  if(!cuota||cuota<1){ alert("La cuota debe ser 1 o mayor (ej: 1.85)."); return; }
+  if(!monto||monto<=0){ alert("Poné el monto en pesos."); return; }
+  state.bets.push({id:Date.now(),fecha,evento,cuota,monto,resultado});
+  // si la apuesta es de otro mes, saltar a ese mes
+  const mk = monthKeyFromDate(fecha);
+  if(mk!==state.active) state.active=mk;
+  save();
+  document.getElementById("fEvento").value="";
+  document.getElementById("fCuota").value="";
+  document.getElementById("fMonto").value="";
+  document.getElementById("fResultado").value="Pendiente";
+  document.getElementById("riskWarn").innerHTML="";
+  render();
+});
+
+document.getElementById("tbody").addEventListener("click",e=>{
+  const btn = e.target.closest("[data-act='del']");
+  if(btn){
+    const id = Number(btn.dataset.id);
+    if(confirm("¿Borrar esta apuesta?")){
+      state.bets = state.bets.filter(b=>b.id!==id); save(); render();
+    }
+  }
+});
+document.getElementById("tbody").addEventListener("change",e=>{
+  const sel = e.target.closest("[data-act='res']");
+  if(sel){
+    const id = Number(sel.dataset.id);
+    const b = state.bets.find(x=>x.id===id);
+    if(b){ b.resultado = sel.value; save(); render(); }
+  }
+});
+
+// Backup
+document.getElementById("btnExportJson").addEventListener("click",()=>{
+  download("control_apuestas_backup.json", JSON.stringify(state,null,2), "application/json");
+});
+document.getElementById("btnImportJson").addEventListener("click",()=>document.getElementById("importFile").click());
+document.getElementById("importFile").addEventListener("change",e=>{
+  const file=e.target.files[0]; if(!file) return;
+  const r=new FileReader();
+  r.onload=()=>{ try{
+    const s=JSON.parse(r.result);
+    if(!s.bets) throw new Error("formato");
+    if(confirm("Esto reemplazará los datos actuales. ¿Continuar?")){
+      state=s; state.banks=state.banks||{}; state.risk=state.risk??DEFAULT_RISK; save(); render();
+    }
+  }catch(err){ alert("Archivo inválido."); } };
+  r.readAsText(file);
+  e.target.value="";
+});
+document.getElementById("btnExportCsv").addEventListener("click",()=>{
+  const bank=bankOf(state.active); const bets=betsOfActive(); let acum=bank;
+  const rows=[["Fecha","Apuesta","Cuota","Monto","% bank","Resultado","Retorno","Neto","Bank acum"]];
+  bets.forEach(b=>{ const n=neto(b); acum+=n;
+    rows.push([b.fecha,b.evento,b.cuota,b.monto,(b.monto/bank*100).toFixed(2)+"%",b.resultado,retorno(b),Math.round(n),Math.round(acum)]);
+  });
+  const csv=rows.map(r=>r.map(c=>`"${String(c).replace(/"/g,'""')}"`).join(",")).join("\n");
+  download("apuestas_"+state.active+".csv","﻿"+csv,"text/csv");
+});
+function download(name,content,type){
+  const blob=new Blob([content],{type}); const url=URL.createObjectURL(blob);
+  const a=document.createElement("a"); a.href=url; a.download=name; a.click();
+  setTimeout(()=>URL.revokeObjectURL(url),1000);
+}
+
+// init
+document.getElementById("fFecha").value = new Date().toISOString().slice(0,10);
+render();
+</script>
+</body>
+</html>
