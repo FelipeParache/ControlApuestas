@@ -2,7 +2,12 @@
 <html lang="es">
 <head>
 <meta charset="UTF-8">
-<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
+<meta name="theme-color" content="#2563eb">
+<meta name="mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="default">
+<meta name="apple-mobile-web-app-title" content="Apuestas">
 <title>Control de Apuestas</title>
 <script src="https://cdn.jsdelivr.net/npm/chart.js@4.5.0/dist/chart.umd.js" integrity="sha384-iU8HYtnGQ8Cy4zl7gbNMOhsDTTKX02BTXptVP/vqAWIaTfM7isw76iyZCsjL2eVi" crossorigin="anonymous"></script>
 <style>
@@ -91,7 +96,23 @@ select.res-inline{padding:4px 6px;font-size:12px;font-weight:700;}
 .combo-total{margin-top:10px;font-weight:700;color:var(--indigo);font-size:14px;}
 .combo-total b{font-size:18px;}
 .sub-line{font-size:11px;color:var(--muted);margin-top:3px;white-space:normal;}
-@media(max-width:560px){ th,td{padding:7px 6px;} h1{font-size:18px;} }
+/* riesgo */
+.risk-grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(240px,1fr));gap:16px;margin-top:12px;}
+.risk-box .rb-top{display:flex;justify-content:space-between;font-size:13px;font-weight:600;margin-bottom:4px;}
+.pbar{height:12px;background:var(--slate-bg);border-radius:999px;overflow:hidden;}
+.pbar>span{display:block;height:100%;border-radius:999px;transition:width .3s;}
+.risk-alert{border-radius:8px;padding:10px 12px;font-size:13px;font-weight:600;margin-bottom:12px;}
+.risk-alert.red{background:var(--red-bg);color:#991b1b;border:1px solid #fca5a5;}
+.risk-alert.green{background:var(--green-bg);color:#166534;border:1px solid #86efac;}
+/* filtros */
+.filters{gap:8px;margin-bottom:12px;}
+.filters select,.filters input{padding:6px 9px;font-size:13px;}
+/* toast */
+.toast{position:fixed;left:50%;bottom:20px;transform:translateX(-50%);
+  background:var(--ink);color:#fff;padding:10px 16px;border-radius:10px;
+  display:flex;align-items:center;gap:14px;font-size:14px;box-shadow:0 6px 24px rgba(0,0,0,.25);z-index:50;}
+.toast button{background:#3b82f6;color:#fff;padding:5px 12px;font-size:13px;}
+@media(max-width:560px){ th,td{padding:7px 6px;} h1{font-size:18px;} body{padding:12px;} }
 </style>
 </head>
 <body>
@@ -129,6 +150,16 @@ select.res-inline{padding:4px 6px;font-size:12px;font-weight:700;}
     </div>
   </div>
 
+  <!-- GESTION DE RIESGO -->
+  <div class="card">
+    <h2>Gestión de riesgo del mes</h2>
+    <div class="row">
+      <div class="field"><label>Stop-loss: frená al perder (%)</label><input id="slInput" type="number" step="1" style="width:150px"></div>
+      <div class="field"><label>Objetivo de ganancia (%)</label><input id="tgInput" type="number" step="1" style="width:150px"></div>
+    </div>
+    <div id="riskMgmt"></div>
+  </div>
+
   <!-- KPIs -->
   <div class="kpis" id="kpis"></div>
 
@@ -137,10 +168,31 @@ select.res-inline{padding:4px 6px;font-size:12px;font-weight:700;}
     <div class="counts" id="counts"></div>
   </div>
 
-  <!-- GRAFICO -->
+  <!-- GRAFICO BANK -->
   <div class="card">
     <h2>Evolución del bank</h2>
     <div class="chart-box"><canvas id="chart"></canvas></div>
+  </div>
+
+  <!-- HISTORICO MENSUAL -->
+  <div class="card" id="histCard" style="display:none">
+    <h2>Histórico mensual (resultado neto)</h2>
+    <div class="chart-box"><canvas id="chartHist"></canvas></div>
+  </div>
+
+  <!-- RENDIMIENTO POR CUOTA -->
+  <div class="card">
+    <h2>Rendimiento por rango de cuota</h2>
+    <div class="tblwrap">
+      <table>
+        <thead><tr>
+          <th class="l">Rango de cuota</th><th>Apuestas</th><th>Aciertos</th>
+          <th>Tasa</th><th>Apostado</th><th>Neto</th><th>Yield</th>
+        </tr></thead>
+        <tbody id="bucketBody"></tbody>
+      </table>
+    </div>
+    <div class="foot" id="bucketEmpty" style="display:none">Sin apuestas resueltas este mes todavía.</div>
   </div>
 
   <!-- FORM NUEVA APUESTA -->
@@ -199,6 +251,15 @@ select.res-inline{padding:4px 6px;font-size:12px;font-weight:700;}
   <!-- TABLA -->
   <div class="card">
     <h2>Registro del mes</h2>
+    <div class="row filters">
+      <div class="field"><label>Resultado</label>
+        <select id="fltRes"><option>Todas</option><option>Pendiente</option><option>Ganada</option><option>Perdida</option><option>Nula</option></select>
+      </div>
+      <div class="field"><label>Tipo</label>
+        <select id="fltTipo"><option>Todos</option><option>Simple</option><option>Combinada</option></select>
+      </div>
+      <div class="field" style="flex:1;min-width:160px"><label>Buscar</label><input id="fltText" type="text" placeholder="Nombre de la apuesta o selección"></div>
+    </div>
     <div class="tblwrap">
       <table id="tbl">
         <thead>
@@ -217,17 +278,20 @@ select.res-inline{padding:4px 6px;font-size:12px;font-weight:700;}
   <p class="foot">Los datos se guardan en este dispositivo. Hacé respaldos periódicos con el botón JSON.</p>
 </div>
 
+<div class="toast" id="toast" style="display:none"></div>
+
 <script>
 "use strict";
 const KEY = "control_apuestas_v1";
 const DEFAULT_BANK = 500000;
 const DEFAULT_RISK = 5;
+const DEFAULT_SL = 20;   // stop-loss %
+const DEFAULT_TG = 30;   // objetivo %
 
 const nf = new Intl.NumberFormat("es-AR",{maximumFractionDigits:0});
 const pf = (x)=> (x*100).toFixed(1).replace(".",",")+"%";
 const money = (x)=> "$"+nf.format(Math.round(x));
 const money1 = (x)=> (x<0?"-$":"$")+nf.format(Math.round(Math.abs(x)));
-// acepta coma o punto como separador decimal
 const parseNum = (v)=> parseFloat(String(v==null?"":v).replace(",","."));
 
 function monthKeyFromDate(d){ return d.slice(0,7); }
@@ -238,17 +302,19 @@ function monthLabel(k){
 }
 
 let state = load();
-let comboSel = [];      // selecciones en construcción
-let editingId = null;   // id de la apuesta en edición (null = alta nueva)
-let chart = null;
+let comboSel = [];
+let editingId = null;
+let chart = null, chartHist = null;
+let undoData = null, undoTimer = null;
 
 function load(){
   try{
     const raw = localStorage.getItem(KEY);
-    if(raw){ const s=JSON.parse(raw); s.banks=s.banks||{}; s.bets=s.bets||[]; s.risk=s.risk??DEFAULT_RISK; return s; }
+    if(raw){ const s=JSON.parse(raw); s.banks=s.banks||{}; s.bets=s.bets||[];
+      s.risk=s.risk??DEFAULT_RISK; s.stopLoss=s.stopLoss??DEFAULT_SL; s.target=s.target??DEFAULT_TG; return s; }
   }catch(e){}
   const today = new Date().toISOString().slice(0,10);
-  return { active: monthKeyFromDate(today), banks:{}, bets:[], risk:DEFAULT_RISK };
+  return { active: monthKeyFromDate(today), banks:{}, bets:[], risk:DEFAULT_RISK, stopLoss:DEFAULT_SL, target:DEFAULT_TG };
 }
 function save(){ localStorage.setItem(KEY, JSON.stringify(state)); }
 function bankOf(mk){ return state.banks[mk] ?? DEFAULT_BANK; }
@@ -283,12 +349,17 @@ function render(){
   const bank = bankOf(state.active);
   document.getElementById("bankInput").value = bank;
   document.getElementById("riskInput").value = state.risk;
+  document.getElementById("slInput").value = state.stopLoss;
+  document.getElementById("tgInput").value = state.target;
   document.getElementById("monthPick").value = state.active;
   const bets = betsOfActive();
   renderKpis(bets, bank);
   renderCounts(bets);
-  renderTable(bets, bank);
+  renderRiskMgmt(bets, bank);
   renderChart(bets, bank);
+  renderHist();
+  renderBuckets(bets);
+  renderTable(bets, bank);
   renderStakeHint(bank);
 }
 function renderMonths(){
@@ -304,6 +375,11 @@ function streak(bets){
     else break;
   }
   return {n,last};
+}
+function totals(bets, bank){
+  const netos = bets.map(neto);
+  const netoTotal = netos.reduce((s,x)=>s+x,0);
+  return {netoTotal, bankActual: bank+netoTotal};
 }
 function renderKpis(bets, bank){
   const totalApostado = bets.reduce((s,b)=>s+b.monto,0);
@@ -321,6 +397,9 @@ function renderKpis(bets, bank){
   const tasa = (g+p)? g/(g+p) : 0;
   const cuotaProm = resueltas.length? resueltas.reduce((s,b)=>s+b.cuota,0)/resueltas.length : 0;
   const st = streak(bets);
+  const pend = bets.filter(b=>b.resultado==="Pendiente");
+  const enJuego = pend.reduce((s,b)=>s+b.monto,0);
+  const potencial = pend.reduce((s,b)=>s+b.monto*(b.cuota-1),0);
   const cls = (x)=> x>0?"pos":x<0?"neg":"neu";
   const kpis = [
     ["Bank inicial", money(bank), ""],
@@ -335,6 +414,7 @@ function renderKpis(bets, bank){
     ["Racha actual", st.n?String(st.n):"—",
       st.last==="Ganada"?"ganadas seguidas":st.last==="Perdida"?"perdidas seguidas":"",
       st.last==="Ganada"?"pos":st.last==="Perdida"?"neg":"neu"],
+    ["En juego", money(enJuego), pend.length+" pend. · +"+money(potencial)+" si ganan", pend.length?"neu":""],
   ];
   document.getElementById("kpis").innerHTML = kpis.map(k=>`
     <div class="kpi"><div class="k-label">${k[0]}</div>
@@ -353,13 +433,50 @@ function renderCounts(bets){
     <span class="pill n" style="background:var(--indigo-bg);color:var(--indigo)">Combinadas: ${comb}</span>
     <span class="pill n" style="background:#f1f5f9;color:#334155">Total: ${bets.length}</span>`;
 }
+function renderRiskMgmt(bets, bank){
+  const {netoTotal} = totals(bets, bank);
+  const sl=state.stopLoss, tg=state.target;
+  const slAmt=bank*sl/100, tgAmt=bank*tg/100;
+  const lossNow=Math.max(0,-netoTotal), gainNow=Math.max(0,netoTotal);
+  const slPct=slAmt? Math.min(1,lossNow/slAmt):0;
+  const tgPct=tgAmt? Math.min(1,gainNow/tgAmt):0;
+  let banner="";
+  if(slAmt>0 && netoTotal<=-slAmt)
+    banner=`<div class="risk-alert red">⛔ Frená: llegaste a tu stop-loss. Perdiste ${money(lossNow)} (${pf(lossNow/bank)} del bank, límite ${sl}%). Lo más rentable ahora es cerrar el mes.</div>`;
+  else if(tgAmt>0 && netoTotal>=tgAmt)
+    banner=`<div class="risk-alert green">✅ Objetivo cumplido: ganaste ${money(gainNow)} (+${pf(gainNow/bank)}, meta ${tg}%). Considerá retirar la ganancia y cerrar el mes.</div>`;
+  document.getElementById("riskMgmt").innerHTML = banner + `
+    <div class="risk-grid">
+      <div class="risk-box">
+        <div class="rb-top"><span>Hacia el stop-loss</span><span class="${slPct>=1?'neg':''}">${money(lossNow)} / ${money(slAmt)}</span></div>
+        <div class="pbar"><span style="width:${(slPct*100).toFixed(0)}%;background:${slPct>=1?'var(--red)':slPct>=.7?'var(--amber)':'#f87171'}"></span></div>
+      </div>
+      <div class="risk-box">
+        <div class="rb-top"><span>Hacia el objetivo</span><span class="${tgPct>=1?'pos':''}">${money(gainNow)} / ${money(tgAmt)}</span></div>
+        <div class="pbar"><span style="width:${(tgPct*100).toFixed(0)}%;background:${tgPct>=1?'var(--green)':'#4ade80'}"></span></div>
+      </div>
+    </div>`;
+}
 function renderTable(bets, bank){
   const tb = document.getElementById("tbody");
-  document.getElementById("emptyMsg").style.display = bets.length? "none":"block";
-  let acum = bank;
+  const fRes=document.getElementById("fltRes").value;
+  const fTipo=document.getElementById("fltTipo").value;
+  const fText=document.getElementById("fltText").value.trim().toLowerCase();
+  const pass=(b)=>{
+    if(fRes!=="Todas" && b.resultado!==fRes) return false;
+    if(fTipo!=="Todos" && (b.tipo||"Simple")!==fTipo) return false;
+    if(fText){
+      const hay=((b.evento||"")+" "+((b.selecciones||[]).map(s=>s.nombre).join(" "))).toLowerCase();
+      if(!hay.includes(fText)) return false;
+    }
+    return true;
+  };
+  let acum = bank, rows="", shown=0;
   const tagCls = {Ganada:"g",Perdida:"p",Nula:"n",Pendiente:"pend"};
-  tb.innerHTML = bets.map((b,i)=>{
-    const n = neto(b); acum += n;
+  bets.forEach((b,i)=>{
+    const n = neto(b); acum += n;               // acum siempre sobre el total del mes
+    if(!pass(b)) return;
+    shown++;
     const pct = bank? b.monto/bank : 0;
     const over = pct*100 > state.risk;
     const ncls = n>0?"pos":n<0?"neg":"neu";
@@ -367,7 +484,7 @@ function renderTable(bets, bank){
     const subLine = isComb
       ? `<div class="sub-line">${b.selecciones.map(s=>escapeHtml(s.nombre)+' @'+Number(s.cuota).toFixed(2)).join(' · ')}</div>`
       : "";
-    return `<tr class="${b.id===editingId?'editing':''}">
+    rows += `<tr class="${b.id===editingId?'editing':''}">
       <td class="l muted">${i+1}</td>
       <td class="l">${b.fecha.slice(8,10)}/${b.fecha.slice(5,7)}</td>
       <td class="l name">${isComb?'<span class="tag comb">COMB</span> ':''}${escapeHtml(b.evento)}${subLine}</td>
@@ -387,7 +504,11 @@ function renderTable(bets, bank){
         <button class="btn-danger icon-btn" data-id="${b.id}" data-act="del" title="Borrar">✕</button>
       </div></td>
     </tr>`;
-  }).join("");
+  });
+  tb.innerHTML = rows;
+  document.getElementById("emptyMsg").style.display = shown? "none":"block";
+  document.getElementById("emptyMsg").textContent = bets.length
+    ? "Ninguna apuesta coincide con el filtro." : "Todavía no cargaste apuestas este mes.";
 }
 function renderChart(bets, bank){
   const resueltas = bets.filter(b=>b.resultado!=="Pendiente");
@@ -403,6 +524,58 @@ function renderChart(bets, bank){
       plugins:{legend:{display:false},tooltip:{callbacks:{label:c=>money(c.parsed.y)}}},
       scales:{y:{ticks:{callback:v=>"$"+nf.format(v)}},x:{grid:{display:false}}}}
   });
+}
+function renderHist(){
+  const map={};
+  state.bets.forEach(b=>{ const k=monthKeyFromDate(b.fecha); map[k]=(map[k]||0)+neto(b); });
+  const keys=Object.keys(map).sort();
+  const card=document.getElementById("histCard");
+  if(keys.length<2){ card.style.display="none"; if(chartHist){chartHist.destroy();chartHist=null;} return; }
+  card.style.display="";
+  const labels=keys.map(monthLabel);
+  const data=keys.map(k=>Math.round(map[k]));
+  const colors=data.map(v=>v>=0?"#16a34a":"#dc2626");
+  const ctx=document.getElementById("chartHist");
+  if(chartHist) chartHist.destroy();
+  chartHist=new Chart(ctx,{
+    type:"bar",
+    data:{labels,datasets:[{label:"Neto",data,backgroundColor:colors,borderRadius:6}]},
+    options:{responsive:true,maintainAspectRatio:false,
+      plugins:{legend:{display:false},tooltip:{callbacks:{label:c=>money(c.parsed.y)}}},
+      scales:{y:{ticks:{callback:v=>"$"+nf.format(v)}},x:{grid:{display:false}}}}
+  });
+}
+function renderBuckets(bets){
+  const buckets=[
+    {lo:1,hi:1.5,lbl:"1.00 – 1.49"},
+    {lo:1.5,hi:2,lbl:"1.50 – 1.99"},
+    {lo:2,hi:3,lbl:"2.00 – 2.99"},
+    {lo:3,hi:Infinity,lbl:"3.00 o más"},
+  ];
+  const resueltas = bets.filter(b=>b.resultado!=="Pendiente");
+  const body=document.getElementById("bucketBody");
+  document.getElementById("bucketEmpty").style.display = resueltas.length? "none":"block";
+  const rows = buckets.map(bk=>{
+    const inb = resueltas.filter(b=>b.cuota>=bk.lo && b.cuota<bk.hi);
+    if(!inb.length) return "";
+    const g = inb.filter(b=>b.resultado==="Ganada").length;
+    const gp = inb.filter(b=>b.resultado==="Ganada"||b.resultado==="Perdida").length;
+    const stake = inb.reduce((s,b)=>s+b.monto,0);
+    const net = inb.reduce((s,b)=>s+neto(b),0);
+    const yld = stake? net/stake : 0;
+    const tasa = gp? g/gp : 0;
+    const ncls=net>0?"pos":net<0?"neg":"neu";
+    return `<tr>
+      <td class="l">${bk.lbl}</td>
+      <td>${inb.length}</td>
+      <td>${g}</td>
+      <td>${gp?pf(tasa):"—"}</td>
+      <td>${money(stake)}</td>
+      <td class="${ncls}">${money1(net)}</td>
+      <td class="${yld>0?'pos':yld<0?'neg':'neu'}">${stake?(yld>=0?"+":"")+pf(yld):"—"}</td>
+    </tr>`;
+  }).join("");
+  body.innerHTML = rows;
 }
 function renderStakeHint(bank){
   const lo=Math.round(bank*0.01), hi=Math.round(bank*0.03);
@@ -470,6 +643,26 @@ function startEdit(id){
   document.getElementById("formCard").scrollIntoView({behavior:"smooth",block:"start"});
 }
 
+// ---------- BORRAR + DESHACER ----------
+function doDelete(id){
+  const idx=state.bets.findIndex(b=>b.id===id); if(idx<0) return;
+  undoData=state.bets[idx];
+  state.bets.splice(idx,1);
+  if(editingId===id){ exitEditMode(); resetForm(); }
+  save(); render(); showUndo();
+}
+function showUndo(){
+  const t=document.getElementById("toast");
+  t.innerHTML=`Apuesta borrada <button id="undoBtn">Deshacer</button>`;
+  t.style.display="flex";
+  clearTimeout(undoTimer);
+  undoTimer=setTimeout(()=>{ t.style.display="none"; undoData=null; },6000);
+  document.getElementById("undoBtn").onclick=()=>{
+    if(undoData){ state.bets.push(undoData); undoData=null; save(); render(); }
+    t.style.display="none";
+  };
+}
+
 // ---------- EVENTS ----------
 document.getElementById("fTipo").addEventListener("change",e=> toggleTipo(e.target.value==="Combinada"));
 document.getElementById("btnAddSel").addEventListener("click",()=>{
@@ -493,12 +686,18 @@ document.getElementById("monthSel").addEventListener("change",e=>{ state.active=
 document.getElementById("monthPick").addEventListener("change",e=>{
   const v=e.target.value; if(!v) return;
   state.active=v;
-  if(!(v in state.banks)) state.banks[v]=DEFAULT_BANK; // fija el mes para que aparezca en la lista
+  if(!(v in state.banks)) state.banks[v]=DEFAULT_BANK;
   save(); render();
 });
 document.getElementById("bankInput").addEventListener("change",e=>{ state.banks[state.active]=parseNum(e.target.value)||DEFAULT_BANK; save(); render(); });
 document.getElementById("riskInput").addEventListener("change",e=>{ state.risk=parseNum(e.target.value)||DEFAULT_RISK; save(); render(); });
+document.getElementById("slInput").addEventListener("change",e=>{ state.stopLoss=Math.max(0,parseNum(e.target.value)||DEFAULT_SL); save(); render(); });
+document.getElementById("tgInput").addEventListener("change",e=>{ state.target=Math.max(0,parseNum(e.target.value)||DEFAULT_TG); save(); render(); });
 document.getElementById("fMonto").addEventListener("input",checkRiskWarn);
+
+["fltRes","fltTipo","fltText"].forEach(id=>{
+  document.getElementById(id).addEventListener("input",()=>renderTable(betsOfActive(), bankOf(state.active)));
+});
 
 document.getElementById("btnAdd").addEventListener("click",()=>{
   const tipo = document.getElementById("fTipo").value;
@@ -507,7 +706,6 @@ document.getElementById("btnAdd").addEventListener("click",()=>{
   const resultado = document.getElementById("fResultado").value;
   if(!fecha){ alert("Poné una fecha."); return; }
   if(!monto||monto<=0){ alert("Poné el monto en pesos."); return; }
-
   let data;
   if(tipo==="Combinada"){
     if(comboSel.length<2){ alert("Una combinada necesita al menos 2 selecciones."); return; }
@@ -518,9 +716,8 @@ document.getElementById("btnAdd").addEventListener("click",()=>{
     const cuota = parseNum(document.getElementById("fCuota").value);
     if(!evento){ alert("Poné el nombre de la apuesta."); return; }
     if(!cuota||cuota<1){ alert("La cuota debe ser 1 o mayor (ej: 1.85)."); return; }
-    data = {tipo:"Simple", evento, cuota, monto, resultado, fecha, selecciones:undefined};
+    data = {tipo:"Simple", evento, cuota, monto, resultado, fecha};
   }
-
   if(editingId!==null){
     const b = state.bets.find(x=>x.id===editingId);
     if(b){ Object.assign(b, data); if(data.tipo==="Simple") delete b.selecciones; }
@@ -528,12 +725,9 @@ document.getElementById("btnAdd").addEventListener("click",()=>{
     exitEditMode();
   } else {
     state.bets.push({id:Date.now(), ...data});
-    if(!data.selecciones) { /* nada */ }
     state.active = monthKeyFromDate(fecha);
   }
-  save();
-  resetForm();
-  render();
+  save(); resetForm(); render();
 });
 document.getElementById("btnCancelEdit").addEventListener("click",()=>{ exitEditMode(); resetForm(); render(); });
 
@@ -541,13 +735,7 @@ document.getElementById("tbody").addEventListener("click",e=>{
   const ed = e.target.closest("[data-act='edit']");
   if(ed){ startEdit(Number(ed.dataset.id)); return; }
   const del = e.target.closest("[data-act='del']");
-  if(del){ const id=Number(del.dataset.id);
-    if(confirm("¿Borrar esta apuesta?")){
-      state.bets=state.bets.filter(b=>b.id!==id);
-      if(editingId===id) { exitEditMode(); resetForm(); }
-      save(); render();
-    }
-  }
+  if(del){ doDelete(Number(del.dataset.id)); }
 });
 document.getElementById("tbody").addEventListener("change",e=>{
   const sel = e.target.closest("[data-act='res']");
@@ -578,6 +766,7 @@ document.getElementById("importFile").addEventListener("change",e=>{
     if(!s.bets) throw new Error("formato");
     if(confirm("Esto reemplazará los datos actuales. ¿Continuar?")){
       state=s; state.banks=state.banks||{}; state.risk=state.risk??DEFAULT_RISK;
+      state.stopLoss=state.stopLoss??DEFAULT_SL; state.target=state.target??DEFAULT_TG;
       exitEditMode(); save(); render();
     }
   }catch(err){ alert("Archivo inválido."); } };
@@ -599,6 +788,22 @@ function download(name,content,type){
   const a=document.createElement("a"); a.href=url; a.download=name; a.click();
   setTimeout(()=>URL.revokeObjectURL(url),1000);
 }
+
+// ---------- PWA (instalable en el celular) ----------
+(function installPWA(){
+  try{
+    const icon="data:image/svg+xml,"+encodeURIComponent(
+      '<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512"><rect width="512" height="512" rx="96" fill="#2563eb"/><text x="256" y="360" font-size="320" text-anchor="middle" fill="#fff" font-family="Arial,sans-serif" font-weight="bold">$</text></svg>');
+    const manifest={ name:"Control de Apuestas", short_name:"Apuestas", start_url:".",
+      display:"standalone", background_color:"#f6f7f9", theme_color:"#2563eb",
+      icons:[{src:icon,sizes:"512x512",type:"image/svg+xml",purpose:"any"}] };
+    const m=document.createElement("link"); m.rel="manifest";
+    m.href="data:application/manifest+json,"+encodeURIComponent(JSON.stringify(manifest));
+    document.head.appendChild(m);
+    const a=document.createElement("link"); a.rel="apple-touch-icon"; a.href=icon;
+    document.head.appendChild(a);
+  }catch(e){}
+})();
 
 // init
 document.getElementById("fFecha").value = new Date().toISOString().slice(0,10);
