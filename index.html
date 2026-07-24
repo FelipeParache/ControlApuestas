@@ -60,6 +60,7 @@ th{font-size:11px;text-transform:uppercase;letter-spacing:.03em;color:var(--mute
 th.l,td.l{text-align:left;}
 td.name{white-space:normal;max-width:280px;}
 tbody tr:hover{background:#fafbfc;}
+tbody tr.editing{background:#eff6ff;}
 .tag{padding:2px 8px;border-radius:6px;font-size:12px;font-weight:700;}
 .tag.g{background:var(--green-bg);color:var(--green);}
 .tag.p{background:var(--red-bg);color:var(--red);}
@@ -68,6 +69,8 @@ tbody tr:hover{background:#fafbfc;}
 .tag.comb{background:var(--indigo-bg);color:var(--indigo);}
 .warn{background:var(--amber-bg);color:#92400e;border:1px solid #fcd34d;border-radius:8px;
   padding:8px 12px;font-size:13px;margin-bottom:12px;}
+.editbanner{background:#dbeafe;color:#1e40af;border:1px solid #93c5fd;border-radius:8px;
+  padding:8px 12px;font-size:13px;font-weight:600;margin-bottom:12px;}
 .tblwrap{overflow-x:auto;}
 .muted{color:var(--muted);}
 .chart-box{position:relative;height:260px;}
@@ -75,6 +78,9 @@ tbody tr:hover{background:#fafbfc;}
 .actions-cell{display:flex;gap:6px;justify-content:flex-end;}
 .foot{color:var(--muted);font-size:12px;text-align:center;margin-top:8px;}
 select.res-inline{padding:4px 6px;font-size:12px;font-weight:700;}
+.icon-btn{padding:5px 8px;font-size:13px;line-height:1;}
+.btn-edit{background:#e0e7ff;color:var(--indigo);}
+.btn-edit:hover{background:#c7d2fe;}
 /* combinada builder */
 .combo-panel{background:var(--indigo-bg);border:1px solid #c7d2fe;border-radius:10px;padding:12px;margin-top:4px;}
 .sel-item{display:flex;align-items:center;gap:8px;background:#fff;border:1px solid var(--line);
@@ -100,6 +106,10 @@ select.res-inline{padding:4px 6px;font-size:12px;font-weight:700;}
         <div class="field">
           <label>Mes</label>
           <select id="monthSel"></select>
+        </div>
+        <div class="field">
+          <label>Ir a / crear mes</label>
+          <input id="monthPick" type="month" style="width:160px">
         </div>
         <div class="field">
           <label>Bank inicial del mes ($)</label>
@@ -134,8 +144,9 @@ select.res-inline{padding:4px 6px;font-size:12px;font-weight:700;}
   </div>
 
   <!-- FORM NUEVA APUESTA -->
-  <div class="card">
-    <h2>Nueva apuesta</h2>
+  <div class="card" id="formCard">
+    <h2 id="formTitle">Nueva apuesta</h2>
+    <div class="editbanner" id="editBanner" style="display:none">✎ Estás editando una apuesta. Guardá los cambios o cancelá.</div>
     <div class="row" style="margin-bottom:6px">
       <div class="field"><label>Tipo</label>
         <select id="fTipo" style="width:150px">
@@ -150,7 +161,7 @@ select.res-inline{padding:4px 6px;font-size:12px;font-weight:700;}
     <div id="simpleBox">
       <div class="row">
         <div class="field" style="flex:1;min-width:200px"><label>Apuesta (ej: River gana)</label><input id="fEvento" type="text" placeholder="Selección / evento" style="width:100%"></div>
-        <div class="field"><label>Cuota</label><input id="fCuota" type="number" step="0.01" placeholder="1.85" style="width:110px"></div>
+        <div class="field"><label>Cuota</label><input id="fCuota" type="text" inputmode="decimal" placeholder="1.85" style="width:110px"></div>
       </div>
     </div>
 
@@ -159,7 +170,7 @@ select.res-inline{padding:4px 6px;font-size:12px;font-weight:700;}
       <div class="combo-panel">
         <div class="row">
           <div class="field" style="flex:1;min-width:180px"><label>Selección</label><input id="cSelName" type="text" placeholder="River gana" style="width:100%"></div>
-          <div class="field"><label>Cuota</label><input id="cSelCuota" type="number" step="0.01" placeholder="1.80" style="width:110px"></div>
+          <div class="field"><label>Cuota</label><input id="cSelCuota" type="text" inputmode="decimal" placeholder="1.80" style="width:110px"></div>
           <div class="field"><label>&nbsp;</label><button class="btn-ghost" id="btnAddSel">+ Selección</button></div>
         </div>
         <div id="selList"></div>
@@ -169,7 +180,7 @@ select.res-inline{padding:4px 6px;font-size:12px;font-weight:700;}
 
     <!-- SHARED -->
     <div class="row" style="margin-top:12px">
-      <div class="field"><label>Monto ($)</label><input id="fMonto" type="number" step="500" placeholder="15000" style="width:120px"></div>
+      <div class="field"><label>Monto ($)</label><input id="fMonto" type="text" inputmode="numeric" placeholder="15000" style="width:120px"></div>
       <div class="field"><label>Resultado</label>
         <select id="fResultado" style="width:130px">
           <option value="Pendiente">Pendiente</option>
@@ -179,6 +190,7 @@ select.res-inline{padding:4px 6px;font-size:12px;font-weight:700;}
         </select>
       </div>
       <div class="field"><label>&nbsp;</label><button class="btn" id="btnAdd">Agregar apuesta</button></div>
+      <div class="field"><label>&nbsp;</label><button class="btn-ghost" id="btnCancelEdit" style="display:none">Cancelar</button></div>
     </div>
     <div id="riskWarn" style="margin-top:10px"></div>
     <div class="foot" id="stakeHint"></div>
@@ -215,6 +227,8 @@ const nf = new Intl.NumberFormat("es-AR",{maximumFractionDigits:0});
 const pf = (x)=> (x*100).toFixed(1).replace(".",",")+"%";
 const money = (x)=> "$"+nf.format(Math.round(x));
 const money1 = (x)=> (x<0?"-$":"$")+nf.format(Math.round(Math.abs(x)));
+// acepta coma o punto como separador decimal
+const parseNum = (v)=> parseFloat(String(v==null?"":v).replace(",","."));
 
 function monthKeyFromDate(d){ return d.slice(0,7); }
 function monthLabel(k){
@@ -224,7 +238,8 @@ function monthLabel(k){
 }
 
 let state = load();
-let comboSel = [];   // selecciones en construcción
+let comboSel = [];      // selecciones en construcción
+let editingId = null;   // id de la apuesta en edición (null = alta nueva)
 let chart = null;
 
 function load(){
@@ -253,6 +268,7 @@ function monthsPresent(){
   const set = new Set(state.bets.map(b=>monthKeyFromDate(b.fecha)));
   set.add(state.active);
   set.add(monthKeyFromDate(new Date().toISOString().slice(0,10)));
+  Object.keys(state.banks).forEach(k=>set.add(k));
   return [...set].sort().reverse();
 }
 function betsOfActive(){
@@ -267,6 +283,7 @@ function render(){
   const bank = bankOf(state.active);
   document.getElementById("bankInput").value = bank;
   document.getElementById("riskInput").value = state.risk;
+  document.getElementById("monthPick").value = state.active;
   const bets = betsOfActive();
   renderKpis(bets, bank);
   renderCounts(bets);
@@ -277,6 +294,16 @@ function render(){
 function renderMonths(){
   const sel = document.getElementById("monthSel");
   sel.innerHTML = monthsPresent().map(m=>`<option value="${m}" ${m===state.active?"selected":""}>${monthLabel(m)}</option>`).join("");
+}
+function streak(bets){
+  const seq = bets.filter(b=>b.resultado==="Ganada"||b.resultado==="Perdida");
+  let n=0,last=null;
+  for(let i=seq.length-1;i>=0;i--){
+    if(last===null){ last=seq[i].resultado; n=1; }
+    else if(seq[i].resultado===last) n++;
+    else break;
+  }
+  return {n,last};
 }
 function renderKpis(bets, bank){
   const totalApostado = bets.reduce((s,b)=>s+b.monto,0);
@@ -292,6 +319,8 @@ function renderKpis(bets, bank){
   const g = bets.filter(b=>b.resultado==="Ganada").length;
   const p = bets.filter(b=>b.resultado==="Perdida").length;
   const tasa = (g+p)? g/(g+p) : 0;
+  const cuotaProm = resueltas.length? resueltas.reduce((s,b)=>s+b.cuota,0)/resueltas.length : 0;
+  const st = streak(bets);
   const cls = (x)=> x>0?"pos":x<0?"neg":"neu";
   const kpis = [
     ["Bank inicial", money(bank), ""],
@@ -302,6 +331,10 @@ function renderKpis(bets, bank){
     ["Ganancias", money(ganancias), "", "pos"],
     ["Pérdidas", money(perdidas), "", perdidas>0?"neg":"neu"],
     ["Tasa de acierto", pf(tasa), g+"G / "+p+"P"],
+    ["Cuota promedio", cuotaProm?cuotaProm.toFixed(2):"—", "de apuestas resueltas"],
+    ["Racha actual", st.n?String(st.n):"—",
+      st.last==="Ganada"?"ganadas seguidas":st.last==="Perdida"?"perdidas seguidas":"",
+      st.last==="Ganada"?"pos":st.last==="Perdida"?"neg":"neu"],
   ];
   document.getElementById("kpis").innerHTML = kpis.map(k=>`
     <div class="kpi"><div class="k-label">${k[0]}</div>
@@ -334,7 +367,7 @@ function renderTable(bets, bank){
     const subLine = isComb
       ? `<div class="sub-line">${b.selecciones.map(s=>escapeHtml(s.nombre)+' @'+Number(s.cuota).toFixed(2)).join(' · ')}</div>`
       : "";
-    return `<tr>
+    return `<tr class="${b.id===editingId?'editing':''}">
       <td class="l muted">${i+1}</td>
       <td class="l">${b.fecha.slice(8,10)}/${b.fecha.slice(5,7)}</td>
       <td class="l name">${isComb?'<span class="tag comb">COMB</span> ':''}${escapeHtml(b.evento)}${subLine}</td>
@@ -349,7 +382,10 @@ function renderTable(bets, bank){
       <td>${retorno(b)?money(retorno(b)):"—"}</td>
       <td class="${ncls}">${b.resultado==="Pendiente"?"—":money1(n)}</td>
       <td>${money(acum)}</td>
-      <td><div class="actions-cell"><button class="btn-danger btn-sm" data-id="${b.id}" data-act="del">✕</button></div></td>
+      <td><div class="actions-cell">
+        <button class="btn-edit icon-btn" data-id="${b.id}" data-act="edit" title="Editar">✎</button>
+        <button class="btn-danger icon-btn" data-id="${b.id}" data-act="del" title="Borrar">✕</button>
+      </div></td>
     </tr>`;
   }).join("");
 }
@@ -388,20 +424,57 @@ function renderComboSel(){
   if(comboSel.length<2){
     t.innerHTML = `Agregá al menos 2 selecciones. ${comboSel.length===1?"(1 cargada)":""}`;
   } else {
-    const prod = comboProduct();
-    t.innerHTML = `Cuota combinada: <b>${prod.toFixed(2)}</b> &nbsp;·&nbsp; ${comboSel.length} selecciones`;
+    t.innerHTML = `Cuota combinada: <b>${comboProduct().toFixed(2)}</b> &nbsp;·&nbsp; ${comboSel.length} selecciones`;
   }
 }
 
-// ---------- EVENTS ----------
-document.getElementById("fTipo").addEventListener("change",e=>{
-  const comb = e.target.value==="Combinada";
+// ---------- EDICIÓN ----------
+function toggleTipo(comb){
   document.getElementById("comboBox").style.display = comb?"block":"none";
   document.getElementById("simpleBox").style.display = comb?"none":"block";
-});
+}
+function exitEditMode(){
+  editingId=null;
+  document.getElementById("btnAdd").textContent="Agregar apuesta";
+  document.getElementById("btnCancelEdit").style.display="none";
+  document.getElementById("formTitle").textContent="Nueva apuesta";
+  document.getElementById("editBanner").style.display="none";
+}
+function resetForm(){
+  comboSel=[]; renderComboSel();
+  document.getElementById("fEvento").value="";
+  document.getElementById("fCuota").value="";
+  document.getElementById("fMonto").value="";
+  document.getElementById("fResultado").value="Pendiente";
+  document.getElementById("riskWarn").innerHTML="";
+}
+function startEdit(id){
+  const b = state.bets.find(x=>x.id===id); if(!b) return;
+  editingId=id;
+  document.getElementById("fFecha").value=b.fecha;
+  document.getElementById("fMonto").value=b.monto;
+  document.getElementById("fResultado").value=b.resultado;
+  if(b.tipo==="Combinada"){
+    document.getElementById("fTipo").value="Combinada"; toggleTipo(true);
+    comboSel=(b.selecciones||[]).map(s=>({...s})); renderComboSel();
+  } else {
+    document.getElementById("fTipo").value="Simple"; toggleTipo(false);
+    document.getElementById("fEvento").value=b.evento;
+    document.getElementById("fCuota").value=b.cuota;
+  }
+  document.getElementById("btnAdd").textContent="Guardar cambios";
+  document.getElementById("btnCancelEdit").style.display="";
+  document.getElementById("formTitle").textContent="Editar apuesta";
+  document.getElementById("editBanner").style.display="";
+  render();
+  document.getElementById("formCard").scrollIntoView({behavior:"smooth",block:"start"});
+}
+
+// ---------- EVENTS ----------
+document.getElementById("fTipo").addEventListener("change",e=> toggleTipo(e.target.value==="Combinada"));
 document.getElementById("btnAddSel").addEventListener("click",()=>{
   const nombre = document.getElementById("cSelName").value.trim();
-  const cuota = parseFloat(document.getElementById("cSelCuota").value);
+  const cuota = parseNum(document.getElementById("cSelCuota").value);
   if(!nombre){ alert("Poné el nombre de la selección."); return; }
   if(!cuota||cuota<1){ alert("La cuota de la selección debe ser 1 o mayor."); return; }
   comboSel.push({nombre,cuota});
@@ -417,49 +490,64 @@ document.getElementById("selList").addEventListener("click",e=>{
 });
 
 document.getElementById("monthSel").addEventListener("change",e=>{ state.active=e.target.value; save(); render(); });
-document.getElementById("bankInput").addEventListener("change",e=>{ state.banks[state.active]=parseFloat(e.target.value)||DEFAULT_BANK; save(); render(); });
-document.getElementById("riskInput").addEventListener("change",e=>{ state.risk=parseFloat(e.target.value)||DEFAULT_RISK; save(); render(); });
+document.getElementById("monthPick").addEventListener("change",e=>{
+  const v=e.target.value; if(!v) return;
+  state.active=v;
+  if(!(v in state.banks)) state.banks[v]=DEFAULT_BANK; // fija el mes para que aparezca en la lista
+  save(); render();
+});
+document.getElementById("bankInput").addEventListener("change",e=>{ state.banks[state.active]=parseNum(e.target.value)||DEFAULT_BANK; save(); render(); });
+document.getElementById("riskInput").addEventListener("change",e=>{ state.risk=parseNum(e.target.value)||DEFAULT_RISK; save(); render(); });
 document.getElementById("fMonto").addEventListener("input",checkRiskWarn);
 
 document.getElementById("btnAdd").addEventListener("click",()=>{
   const tipo = document.getElementById("fTipo").value;
   const fecha = document.getElementById("fFecha").value;
-  const monto = parseFloat(document.getElementById("fMonto").value);
+  const monto = parseNum(document.getElementById("fMonto").value);
   const resultado = document.getElementById("fResultado").value;
   if(!fecha){ alert("Poné una fecha."); return; }
   if(!monto||monto<=0){ alert("Poné el monto en pesos."); return; }
 
-  let bet;
+  let data;
   if(tipo==="Combinada"){
     if(comboSel.length<2){ alert("Una combinada necesita al menos 2 selecciones."); return; }
-    const cuota = comboProduct();
-    const evento = "Combinada ("+comboSel.length+")";
-    bet = {id:Date.now(),fecha,tipo:"Combinada",evento,selecciones:comboSel.map(s=>({...s})),cuota,monto,resultado};
+    data = {tipo:"Combinada", evento:"Combinada ("+comboSel.length+")",
+            selecciones:comboSel.map(s=>({...s})), cuota:comboProduct(), monto, resultado, fecha};
   } else {
     const evento = document.getElementById("fEvento").value.trim();
-    const cuota = parseFloat(document.getElementById("fCuota").value);
+    const cuota = parseNum(document.getElementById("fCuota").value);
     if(!evento){ alert("Poné el nombre de la apuesta."); return; }
     if(!cuota||cuota<1){ alert("La cuota debe ser 1 o mayor (ej: 1.85)."); return; }
-    bet = {id:Date.now(),fecha,tipo:"Simple",evento,cuota,monto,resultado};
+    data = {tipo:"Simple", evento, cuota, monto, resultado, fecha, selecciones:undefined};
   }
-  state.bets.push(bet);
-  const mk = monthKeyFromDate(fecha);
-  if(mk!==state.active) state.active=mk;
+
+  if(editingId!==null){
+    const b = state.bets.find(x=>x.id===editingId);
+    if(b){ Object.assign(b, data); if(data.tipo==="Simple") delete b.selecciones; }
+    state.active = monthKeyFromDate(fecha);
+    exitEditMode();
+  } else {
+    state.bets.push({id:Date.now(), ...data});
+    if(!data.selecciones) { /* nada */ }
+    state.active = monthKeyFromDate(fecha);
+  }
   save();
-  // reset
-  comboSel=[]; renderComboSel();
-  document.getElementById("fEvento").value="";
-  document.getElementById("fCuota").value="";
-  document.getElementById("fMonto").value="";
-  document.getElementById("fResultado").value="Pendiente";
-  document.getElementById("riskWarn").innerHTML="";
+  resetForm();
   render();
 });
+document.getElementById("btnCancelEdit").addEventListener("click",()=>{ exitEditMode(); resetForm(); render(); });
 
 document.getElementById("tbody").addEventListener("click",e=>{
-  const btn = e.target.closest("[data-act='del']");
-  if(btn){ const id=Number(btn.dataset.id);
-    if(confirm("¿Borrar esta apuesta?")){ state.bets=state.bets.filter(b=>b.id!==id); save(); render(); } }
+  const ed = e.target.closest("[data-act='edit']");
+  if(ed){ startEdit(Number(ed.dataset.id)); return; }
+  const del = e.target.closest("[data-act='del']");
+  if(del){ const id=Number(del.dataset.id);
+    if(confirm("¿Borrar esta apuesta?")){
+      state.bets=state.bets.filter(b=>b.id!==id);
+      if(editingId===id) { exitEditMode(); resetForm(); }
+      save(); render();
+    }
+  }
 });
 document.getElementById("tbody").addEventListener("change",e=>{
   const sel = e.target.closest("[data-act='res']");
@@ -468,7 +556,7 @@ document.getElementById("tbody").addEventListener("change",e=>{
 });
 
 function checkRiskWarn(){
-  const monto = parseFloat(document.getElementById("fMonto").value)||0;
+  const monto = parseNum(document.getElementById("fMonto").value)||0;
   const bank = bankOf(state.active);
   const w = document.getElementById("riskWarn");
   if(bank && monto/bank*100 > state.risk){
@@ -489,7 +577,8 @@ document.getElementById("importFile").addEventListener("change",e=>{
     const s=JSON.parse(r.result);
     if(!s.bets) throw new Error("formato");
     if(confirm("Esto reemplazará los datos actuales. ¿Continuar?")){
-      state=s; state.banks=state.banks||{}; state.risk=state.risk??DEFAULT_RISK; save(); render();
+      state=s; state.banks=state.banks||{}; state.risk=state.risk??DEFAULT_RISK;
+      exitEditMode(); save(); render();
     }
   }catch(err){ alert("Archivo inválido."); } };
   r.readAsText(file); e.target.value="";
