@@ -8,6 +8,9 @@
 <meta name="apple-mobile-web-app-capable" content="yes">
 <meta name="apple-mobile-web-app-status-bar-style" content="default">
 <meta name="apple-mobile-web-app-title" content="Apuestas">
+<meta http-equiv="Cache-Control" content="no-cache, no-store, must-revalidate">
+<meta http-equiv="Pragma" content="no-cache">
+<meta http-equiv="Expires" content="0">
 <title>Control de Apuestas</title>
 <script src="https://cdn.jsdelivr.net/npm/chart.js@4.5.0/dist/chart.umd.js" integrity="sha384-iU8HYtnGQ8Cy4zl7gbNMOhsDTTKX02BTXptVP/vqAWIaTfM7isw76iyZCsjL2eVi" crossorigin="anonymous"></script>
 <style>
@@ -117,7 +120,7 @@ select.res-inline{padding:4px 6px;font-size:12px;font-weight:700;}
 </head>
 <body>
 <div class="wrap">
-  <h1>Control de Apuestas</h1>
+  <h1>Control de Apuestas <span id="appVerTop" style="font-size:11px;font-weight:700;color:var(--indigo);background:var(--indigo-bg);padding:2px 8px;border-radius:999px;vertical-align:middle;letter-spacing:.02em;"></span></h1>
   <p class="sub">Cargá el monto en pesos, la cuota y el resultado. Soporta apuestas simples y combinadas.</p>
 
   <!-- CONFIG / MES -->
@@ -275,7 +278,7 @@ select.res-inline{padding:4px 6px;font-size:12px;font-weight:700;}
     <div class="empty" id="emptyMsg" style="display:none">Todavía no cargaste apuestas este mes.</div>
   </div>
 
-  <p class="foot">Los datos se guardan en este dispositivo. Hacé respaldos periódicos con el botón JSON.</p>
+  <p class="foot">Los datos se guardan en este dispositivo. Hacé respaldos periódicos con el botón JSON.<br><span id="appVer"></span></p>
 </div>
 
 <div class="toast" id="toast" style="display:none"></div>
@@ -283,6 +286,7 @@ select.res-inline{padding:4px 6px;font-size:12px;font-weight:700;}
 <script>
 "use strict";
 const KEY = "control_apuestas_v1";
+const APP_VERSION = "v6 · 30/07/2026";
 const DEFAULT_BANK = 500000;
 const DEFAULT_RISK = 5;
 const DEFAULT_SL = 20;   // stop-loss %
@@ -813,6 +817,8 @@ function download(name,content,type){
 
 // init
 setFechaDefault();
+document.getElementById("appVerTop").textContent = APP_VERSION;
+document.getElementById("appVer").textContent = "Versión " + APP_VERSION;
 renderComboSel();
 render();
 </script>
