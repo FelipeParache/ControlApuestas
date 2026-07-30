@@ -613,12 +613,18 @@ function exitEditMode(){
   document.getElementById("formTitle").textContent="Nueva apuesta";
   document.getElementById("editBanner").style.display="none";
 }
+function defaultFechaForActive(){
+  const todayIso = new Date().toISOString().slice(0,10);
+  return state.active === monthKeyFromDate(todayIso) ? todayIso : state.active + "-01";
+}
+function setFechaDefault(){ if(editingId===null) document.getElementById("fFecha").value = defaultFechaForActive(); }
 function resetForm(){
   comboSel=[]; renderComboSel();
   document.getElementById("fEvento").value="";
   document.getElementById("fCuota").value="";
   document.getElementById("fMonto").value="";
   document.getElementById("fResultado").value="Pendiente";
+  setFechaDefault();
   document.getElementById("riskWarn").innerHTML="";
 }
 function startEdit(id){
@@ -682,12 +688,12 @@ document.getElementById("selList").addEventListener("click",e=>{
   if(btn){ comboSel.splice(Number(btn.dataset.idx),1); renderComboSel(); }
 });
 
-document.getElementById("monthSel").addEventListener("change",e=>{ state.active=e.target.value; save(); render(); });
+document.getElementById("monthSel").addEventListener("change",e=>{ state.active=e.target.value; save(); setFechaDefault(); render(); });
 document.getElementById("monthPick").addEventListener("change",e=>{
   const v=e.target.value; if(!v) return;
   state.active=v;
   if(!(v in state.banks)) state.banks[v]=DEFAULT_BANK;
-  save(); render();
+  save(); setFechaDefault(); render();
 });
 document.getElementById("bankInput").addEventListener("change",e=>{ state.banks[state.active]=parseNum(e.target.value)||DEFAULT_BANK; save(); render(); });
 document.getElementById("riskInput").addEventListener("change",e=>{ state.risk=parseNum(e.target.value)||DEFAULT_RISK; save(); render(); });
@@ -806,7 +812,7 @@ function download(name,content,type){
 })();
 
 // init
-document.getElementById("fFecha").value = new Date().toISOString().slice(0,10);
+setFechaDefault();
 renderComboSel();
 render();
 </script>
