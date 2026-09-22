@@ -236,7 +236,7 @@ select.res-inline{padding:4px 6px;font-size:12px;font-weight:700;}
     <!-- SHARED -->
     <div class="row" style="margin-top:12px">
       <div class="field"><label>Monto ($)</label><input id="fMonto" type="text" inputmode="numeric" placeholder="15000" style="width:120px"></div>
-      <div class="field"><label>% del bank (stake)</label><input id="fPct" type="text" inputmode="decimal" placeholder="3" style="width:130px"></div>
+      <div class="field"><label>% del bank inicial</label><input id="fPct" type="text" inputmode="decimal" placeholder="3" style="width:130px"></div>
       <div class="field"><label>Resultado</label>
         <select id="fResultado" style="width:130px">
           <option value="Pendiente">Pendiente</option>
@@ -287,7 +287,7 @@ select.res-inline{padding:4px 6px;font-size:12px;font-weight:700;}
 <script>
 "use strict";
 const KEY = "control_apuestas_v1";
-const APP_VERSION = "v7 · 22/09/2026";
+const APP_VERSION = "v8 · 22/09/2026";
 const DEFAULT_BANK = 500000;
 const DEFAULT_RISK = 5;
 const DEFAULT_SL = 20;   // stop-loss %
@@ -356,24 +356,17 @@ function bankActual(excludeId){
     .filter(b=> excludeId==null || b.id!==excludeId)
     .reduce((s,b)=>s+neto(b),0);
 }
-// Al editar una apuesta se usa el bank congelado al momento de cargarla (bankRef),
-// para no reescribir con que porcentaje se apostó en su momento.
+// La base del stake es SIEMPRE el bank inicial del mes: fija, no se mueve con los resultados.
 function stakeBaseInfo(){
-  if(editingId!==null){
-    const b = state.bets.find(x=>x.id===editingId);
-    if(b && b.bankRef>0) return {base:b.bankRef, congelada:true};
-    return {base:bankActual(editingId), congelada:false};
-  }
-  return {base:bankActual(null), congelada:false};
+  return {base:bankOf(state.active), congelada:false};
 }
 function enJuegoAhora(){
   return betsOfActive()
     .filter(b=> b.resultado==="Pendiente" && b.id!==editingId)
     .reduce((s,b)=>s+b.monto,0);
 }
-// % guardado en la apuesta; si es vieja (sin pctBank) se cae al bank inicial del mes, como antes.
+// % de cada apuesta, siempre sobre el bank inicial del mes.
 function pctDeApuesta(b, bankIni){
-  if(typeof b.pctBank==="number" && isFinite(b.pctBank)) return b.pctBank/100;
   return bankIni ? b.monto/bankIni : 0;
 }
 
@@ -514,9 +507,7 @@ function renderTable(bets, bank){
     shown++;
     const pct = pctDeApuesta(b, bank);
     const over = pct*100 > state.risk;
-    const pctTitle = (b.bankRef>0)
-      ? "Sobre el bank de "+money(b.bankRef)+" que tenías al cargarla"
-      : "Sobre el bank inicial del mes (apuesta cargada antes del cálculo por %)";
+    const pctTitle = "Sobre el bank inicial del mes ("+money(bank)+")";
     const ncls = n>0?"pos":n<0?"neg":"neu";
     const isComb = b.tipo==="Combinada" && b.selecciones && b.selecciones.length;
     const subLine = isComb
@@ -616,20 +607,15 @@ function renderBuckets(bets){
   body.innerHTML = rows;
 }
 function renderStakeHint(){
-  const {base, congelada} = stakeBaseInfo();
-  const ini = bankOf(state.active);
-  const dif = base - ini;
+  const base = bankOf(state.active);
+  const actual = bankActual(null);
   const enJuego = enJuegoAhora();
-  const pend = betsOfActive().filter(b=> b.resultado==="Pendiente" && b.id!==editingId).length;
+  const libre = actual - enJuego;
   const lo=Math.round(base*0.01), hi=Math.round(base*0.03);
-  const linea1 = congelada
-    ? `Base de cálculo: <b>${money(base)}</b> — el bank que tenía esta apuesta cuando la cargaste.`
-    : `Base de cálculo: <b>${money(base)}</b> = bank inicial ${money(ini)} ${dif<0?"−":"+"} ${money(Math.abs(dif))} de apuestas resueltas.`;
-  const linea2 = (!congelada && enJuego)
-    ? ` No se descuentan los ${money(enJuego)} en juego (${pend} pendiente${pend===1?"":"s"}).`
-    : "";
   document.getElementById("stakeHint").innerHTML =
-    linea1 + linea2 + `<br>Stake conservador (1–3% del bank): ${money(lo)} a ${money(hi)}.`;
+    `Base de cálculo: <b>${money(base)}</b> — bank inicial del mes. Es fija: no cambia con los resultados.` +
+    `<br>Bank actual ${money(actual)} · disponible ${money(libre)}${enJuego?` (${money(enJuego)} en juego)`:""}.` +
+    `<br>Stake conservador (1–3% del bank inicial): ${money(lo)} a ${money(hi)}.`;
 }
 
 // ---------- MONTO <-> % DEL BANK ----------
@@ -699,8 +685,7 @@ function startEdit(id){
   document.getElementById("fFecha").value=b.fecha;
   document.getElementById("fMonto").value=b.monto;
   stakeMode="monto";
-  document.getElementById("fPct").value =
-    (typeof b.pctBank==="number" && isFinite(b.pctBank)) ? fmtPct2(b.pctBank) : "";
+  document.getElementById("fPct").value = "";
   document.getElementById("fResultado").value=b.resultado;
   if(b.tipo==="Combinada"){
     document.getElementById("fTipo").value="Combinada"; toggleTipo(true);
@@ -827,7 +812,7 @@ function checkRiskWarn(){
   const monto = parseNum(document.getElementById("fMonto").value)||0;
   const {base} = stakeBaseInfo();
   const enJuego = enJuegoAhora();
-  const disponible = base - enJuego;
+  const disponible = bankActual(null) - enJuego;
   const w = document.getElementById("riskWarn");
   let html = "";
   if(base && monto/base*100 > state.risk){
@@ -865,7 +850,7 @@ document.getElementById("btnExportCsv").addEventListener("click",()=>{
   bets.forEach(b=>{ const n=neto(b); acum+=n;
     const selTxt = (b.selecciones||[]).map(s=>s.nombre+" @"+Number(s.cuota).toFixed(2)).join(" | ");
     rows.push([b.fecha,b.tipo||"Simple",b.evento,selTxt,b.cuota.toFixed(2),b.monto,
-      (pctDeApuesta(b,bank)*100).toFixed(2)+"%",Math.round(b.bankRef>0?b.bankRef:bank),
+      (pctDeApuesta(b,bank)*100).toFixed(2)+"%",Math.round(bank),
       b.resultado,retorno(b),Math.round(n),Math.round(acum)]);
   });
   const csv=rows.map(r=>r.map(c=>`"${String(c).replace(/"/g,'""')}"`).join(",")).join("\n");
